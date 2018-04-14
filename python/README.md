@@ -15,4 +15,4 @@ These scripts work around [this issue](https://github.com/AravisProject/aravis/i
 
 ![Measurements output](fig/vrmagic-static-z-i.png)
 
-* For viewing HDF5 files, [Scientific Library for eXperimentalists (silx)](https://github.com/silx-kit/silx) (also available in distribution packagres) is highly recommended (``silx view file.hdf5``), it has built-in support for visualizing datasets as curves, images and more.
+* For viewing HDF5 files, [Scientific Library for eXperimentalists (silx)](https://github.com/silx-kit/silx) (also available in distribution packages) is highly recommended (``silx view file.hdf5``), it has built-in support for visualizing datasets as curves, images and more.
