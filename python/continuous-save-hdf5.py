@@ -27,36 +27,45 @@ bufQueue=collections.deque(maxlen=50) # discard anything unprocessed if more tha
 def consumeBuffers():
     'Consumes buffers from bufQueue, transforms, builds larger chunks and dumps to HDF5 onces in a while'
     # save this many many consecutive frames as a single 2d array to HDF5
-    h5grpLen=2048
+    h5chunk=100
     # name of the dump file, can be recycled
     h5name='vrmagic-dump.hdf5'
     # root group, new for every launch of this script
     h5root='dump-%s'%datetime.datetime.now().isoformat(timespec='seconds')
     # prepare chunk storage
-    shape=(h5grpLen,2048)
-    CC,AA,II,TT=np.empty(shape,dtype='float32'),np.empty(shape,dtype='float32'),np.empty(shape,dtype='float32'),np.empty((h5grpLen,),dtype='float32')
-    # transformation params
-    # cs,co,as_,ao=csn/csd,con/cod,asn/asd,aon/aod
-    i,grpNum=0,0 # counters
+    shape=(h5chunk,2048)
+    CC,AA,II,TT=np.empty(shape,dtype='float32'),np.empty(shape,dtype='float32'),np.empty(shape,dtype='float32'),np.empty((h5chunk,1),dtype='float32')
+    chunkRow=0
+    chunks=0
     while True:
         if not bufQueue:
             time.sleep(0.005)
             continue
         sys.stderr.write('\b'); sys.stderr.flush() # delete the > written by the producer :)
         d=trsf.payload2dict(bufQueue.pop())
-        C,A,I,timestamp=d['C'],d['A'],d['intensity'],d['timestamp']
+        C,A,I,timestamp=d['C'],d['A'],d['intensity'],np.array([[d['timestamp']]])
         # add frame to larger chunks
-        CC[i,:]=C; AA[i,:]=A; II[i,:]=I; TT[i]=timestamp
+        CC[chunkRow,:]=C; AA[chunkRow,:]=A; II[chunkRow,:]=I; TT[chunkRow,:]=timestamp
+        cols=CC.shape[1]
+        chunkRow+=1
         # chunks full: save to HDF5 and start new group
-        if i==h5grpLen-1: 
-            with h5py.File(h5name,'a') as h5:
-                grp='%s/%05d'%(h5root,grpNum)
-                for data,name in zip([CC,AA,II,TT],['z','x','intensity','timestamp']):
-                    # compression saves about 70% of storage :))
-                    h5.create_dataset(grp+'/'+name,data=data,compression='gzip',compression_opts=9)
-                i=0; grpNum+=1
-            print(' {}: {}, {:_} bytes)'.format(h5name,grp,os.path.getsize(h5name)))
-        else: i+=1
+        if chunkRow%h5chunk!=0: continue
+
+        with h5py.File(h5name,'a') as h5:
+            # create datasets from scratch, empty at first
+            if h5root not in h5:
+                for name,c,dtype in zip(['z','x','intensity','timestamp'],[cols,cols,cols,1],['float32','float32','uint16','float32']):
+                    h5.create_dataset(h5root+'/'+name,(0,c),maxshape=(None,c),dtype=dtype,compression='gzip',compression_opts=9)
+            # append outstanding data
+            for data,name in zip([CC,AA,II,TT],['z','x','intensity','timestamp']):
+                ds=h5[h5root+'/'+name]
+                #print(name,ds.shape)
+                ds.resize((ds.shape[0]+h5chunk,ds.shape[1]))
+                # print(name,ds.shape,data.shape,ds[-h5chunk:,:].shape)
+                ds[ds.shape[0]-h5chunk:,:]=data
+        chunks+=1
+        chunkRow=0
+        print(' {}: {} chunks, {} rows, {:_} bytes)'.format(h5name,chunks,chunks*h5chunk,os.path.getsize(h5name)))
 
 
 # inspired by https://kushalvyas.github.io/gige_ubuntu.html
