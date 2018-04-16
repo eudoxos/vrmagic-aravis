@@ -43,19 +43,8 @@ def consumeBuffers():
             time.sleep(0.005)
             continue
         sys.stderr.write('\b'); sys.stderr.flush() # delete the > written by the producer :)
-        dta=bufQueue.pop()
-        d=trsf.payload2dict(dta)
+        d=trsf.payload2dict(bufQueue.pop())
         C,A,I,timestamp=d['C'],d['A'],d['intensity'],d['timestamp']
-        if 0:
-            f=dta[0].view(dtype='int16')
-            # FIXME: should use CoordCDataByteOffset,CoordADataByteOffset,IntensityDataByteOffset,FooterDataByteOffset
-            c16,a16,i16,footer=f[:2048],f[2048:4096],f[4096:6144],f[6144:].tobytes()
-            C=cs*c16+co; A=as_*a16+ao; I=i16
-            _inv=(c16==invalidValue)
-            # print('Invalid: ',np.sum(_inv))
-            C[_inv]=np.nan; A[_inv]=np.nan; I[_inv]=0
-            # extract timestamp from footer; Q is uint64 (8b)
-            timestamp=struct.unpack('Q',footer[tickOffset:tickOffset+8])[0]/tickHz
         # add frame to larger chunks
         CC[i,:]=C; AA[i,:]=A; II[i,:]=I; TT[i]=timestamp
         # chunks full: save to HDF5 and start new group
