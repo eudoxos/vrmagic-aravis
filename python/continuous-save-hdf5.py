@@ -27,7 +27,7 @@ bufQueue=collections.deque(maxlen=50) # discard anything unprocessed if more tha
 def consumeBuffers():
     'Consumes buffers from bufQueue, transforms, builds larger chunks and dumps to HDF5 onces in a while'
     # save this many many consecutive frames as a single 2d array to HDF5
-    h5chunk=100
+    h5chunk=2048
     # name of the dump file, can be recycled
     h5name='vrmagic-dump.hdf5'
     # root group, new for every launch of this script

@@ -1,38 +1,40 @@
 import numpy as np
-import ctypes, struct
+import ctypes, struct, warnings
 
 
 class VRMagicTransformer:
     def __init__(self,cam):
+        '''
+        The constructor initializes the sensor (transfer coordinates rather than images, include intensity, lateral coordinate and footer data) and reads coordinate transformation constants. 
+        '''
         dev=cam.get_device()
+        # device setup
         dev.set_string_feature_value('TransferFormat','PROFILE_COORD16')
         dev.set_integer_feature_value('IntensityDataEnable',1)
         dev.set_integer_feature_value('CoordADataEnable',1)
         dev.set_integer_feature_value('FooterDataEnable',1)
-
+        # get constants
         self.tickHz=dev.get_integer_feature_value('FooterTimestampTickFrequency')
         self.tickOffset=dev.get_integer_feature_value('IntraFooterStartOfExposureTimestampByteOffset')
-
-        self.trsfA,self.trsfC=self.getTrsfFuncObjs(dev)
-
-    def getTrsfFuncObjs(self,dev):
-        '''
-        Given Aravis device *dev*, return tuple of 2 function objects for transforming A and C coordinates from the buffer array to physical coordinates; those function accept numpy.array as input. Invalid values are replaced by np.nan.
-        '''
-        # HACK: convert back to uint64 (8 bytes), take only 4, convert to signed int32
-        # see https://github.com/AravisProject/aravis/issues/147
-        asn,asd,aon,aod,csn,csd,con,cod=[struct.unpack('i',struct.pack('Q',dev.get_integer_feature_value(n))[:4])[0] for n in ['Scan3dCoordinateAScale_Numerator','Scan3dCoordinateAScale_Denominator','Scan3dCoordinateAOffset_Numerator','Scan3dCoordinateAOffset_Denominator','Scan3dCoordinateCScale_Numerator','Scan3dCoordinateCScale_Denominator','Scan3dCoordinateCOffset_Numerator','Scan3dCoordinateCOffset_Denominator']]
-        cs,co,as_,ao=csn/csd,con/cod,asn/asd,aon/aod
-        invalid=dev.get_integer_feature_value('Scan3dInvalidDataValue')
-        def trsfA(a16):
-            ret=as_*a16+ao
-            ret[a16==invalid]=np.nan
-            return ret
-        def trsfC(c16):
-            ret=cs*c16+co
-            ret[c16==invalid]=np.nan
-            return ret
-        return trsfA,trsfC
+        self.invalid=dev.get_integer_feature_value('Scan3dInvalidDataValue')
+        feats=[dev.get_integer_feature_value(f) for f in ['Scan3dCoordinateAScale_Numerator','Scan3dCoordinateAScale_Denominator','Scan3dCoordinateAOffset_Numerator','Scan3dCoordinateAOffset_Denominator','Scan3dCoordinateCScale_Numerator','Scan3dCoordinateCScale_Denominator','Scan3dCoordinateCOffset_Numerator','Scan3dCoordinateCOffset_Denominator']]
+        # do we need the bug workaround? see https://github.com/AravisProject/aravis/issues/147
+        if max(feats)>=2**31: 
+            # HACK: convert back to uint64 (8 bytes), take only 4, convert to signed int32
+            warnings.warn('Signed int32 bug in Aravis detected, activating workaround. See https://github.com/AravisProject/aravis/issues/147 for details and update Aravis.')
+            asn,asd,aon,aod,csn,csd,con,cod=[struct.unpack('i',struct.pack('Q',f)[:4])[0] for n in feats]
+        else: asn,asd,aon,aod,csn,csd,con,cod=feats
+        self.cs,self.co,self.as_,self.ao=csn/csd,con/cod,asn/asd,aon/aod
+    def trsfA(self,a16):
+        'Transform raw uint32 a-coordinate to physical coordinates; invalid values are automatically replaced by nan. Operates on numpy.array.'
+        ret=self.as_*a16+self.ao
+        ret[a16==self.invalid]=np.nan
+        return ret
+    def trsfC(self,c16):
+        'Transform raw uint32 c-coordinate to physical coordinates; invalid values are automatically replaced by nan. Operates on numpy.array.'
+        ret=self.cs*c16+self.co
+        ret[c16==self.invalid]=np.nan
+        return ret
     def timestampFromFooter(self,footer):
         tick=struct.unpack('Q',footer[self.tickOffset:self.tickOffset+8])[0]
         return tick/self.tickHz
