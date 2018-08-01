@@ -20,7 +20,7 @@ class VRMagicTransformer:
         self.triggerNoOffset=dev.get_integer_feature_value('IntraFooterTriggerPipelineNumberByteOffset')
         self.multiDeviceBusIdOffset=dev.get_integer_feature_value('IntraFooterMDBDeviceIDByteOffset')
         self.eventNoOffset=dev.get_integer_feature_value('IntraFooterEventNumberByteOffset')
-
+        self.frameCntOff=dev.get_integer_feature_value("IntraFooterFrameCounterByteOffset")
         feats=[dev.get_integer_feature_value(f) for f in ['Scan3dCoordinateAScale_Numerator','Scan3dCoordinateAScale_Denominator','Scan3dCoordinateAOffset_Numerator','Scan3dCoordinateAOffset_Denominator','Scan3dCoordinateCScale_Numerator','Scan3dCoordinateCScale_Denominator','Scan3dCoordinateCOffset_Numerator','Scan3dCoordinateCOffset_Denominator']]
         # do we need the bug workaround? see https://github.com/AravisProject/aravis/issues/147
         if max(feats)>=2**31: 
@@ -48,13 +48,15 @@ class VRMagicTransformer:
         return struct.unpack('H',footer[self.multiDeviceBusIdOffset:self.multiDeviceBusIdOffset+2])[0]
     def eventNoFromFooter(self,footer):
         return struct.unpack('H',footer[self.eventNoOffset:self.eventNoOffset+2])[0]
+    def frameNoFromFooter(self,footer):
+        return struct.unpack('Q',footer[self.frameCntOff:self.frameCntOff+8])[0]
     def payload2dict(self,payload,retRaw=False):
         '''
         Convert buffer data (as bytes object) to dictionary containing structured data.
         '''
         arr=np.ctypeslib.as_array(ctypes.cast(payload,ctypes.POINTER(ctypes.c_int16)),(len(payload)//2,)).copy()
         c16,a16,i16,footer=arr[:2048],arr[2048:4096],arr[4096:6144],arr[6144:].tobytes()
-        ret=dict(A=self.trsfA(a16),C=self.trsfC(c16),intensity=i16,timestamp=self.timestampFromFooter(footer),multiDeviceBusId=self.multiDeviceBusIdFromFooter(footer),eventNo=self.eventNoFromFooter(footer))
+        ret=dict(A=self.trsfA(a16),C=self.trsfC(c16),intensity=i16,timestamp=self.timestampFromFooter(footer),multiDeviceBusId=self.multiDeviceBusIdFromFooter(footer),eventNo=self.eventNoFromFooter(footer),frameNo=self.frameNoFromFooter(footer))
         if retRaw: ret['c16'],ret['a16'],ret['i16']=c16,a16,i16
         return ret
 

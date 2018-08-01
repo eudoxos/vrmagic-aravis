@@ -7,7 +7,7 @@ import sys
 sys.path.append('.')
 import vrmagicTransformer
 
-cam=Aravis.Camera()
+cam=Aravis.Camera.new('VRmagicImaging-EFD0AFMH07')
 trsf=vrmagicTransformer.VRMagicTransformer(cam)
 stream=cam.create_stream(None,None)
 stream.push_buffer(Aravis.Buffer.new_allocate(cam.get_payload()))
