@@ -12,6 +12,8 @@ find_package(Qt5 COMPONENTS Core Widgets Charts REQUIRED)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTOUIC ON)
 
+find_package(OpenMP REQUIRED)
+
 link_directories(
 	${GLIB_LIBRARY_DIRS}
 	${ARAVIS_LIBRARY_DIRS}
@@ -19,11 +21,20 @@ link_directories(
 include_directories(
 	${GLIB_INCLUDE_DIRS}
 	${ARAVIS_INCLUDE_DIRS}
+	${EIGEN3_INCLUDE_DIR}
 )
 add_executable(read-trsf-params read-trsf-params.cpp)
 target_link_libraries(read-trsf-params PUBLIC
+	Eigen3::Eigen
 	${GLIB_LIBRARIES}
 	${ARAVIS_LIBRARIES}
+)
+
+add_executable(synced synced.cpp)
+target_link_libraries(synced PUBLIC
+	${GLIB_LIBRARIES}
+	${ARAVIS_LIBRARIES}
+	OpenMP::OpenMP_CXX
 )
 
 add_executable(live-plot live-plot.cpp)
