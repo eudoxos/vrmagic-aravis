@@ -3,6 +3,7 @@
 #include<Eigen/Core>
 #include<iostream>
 #include<limits>
+#include<memory>
 
 extern "C" {
 	#include<arv.h>
@@ -36,9 +37,8 @@ public:
 	int16_t invalidVal;
 	float aScale,aOff,cScale,cOff;
 
-	// generic parameters, dependent on layout (like ROI etc), initially queried from the device
-	int32_t imgWd, imgHt;
-	int32_t imageSensorWidth;
+	// generic parameters, dependent on layout (like AOI etc), initially queried from the device
+	int32_t aoiWidth;
 	size_t payloadSize;
 
 	// offsets inside payload, queried from the device
@@ -72,9 +72,24 @@ public:
 		uint16_t triggerPipelineNumber;
 	};
 
+	// struct to hold all data extracted from frame
+	struct CookedFrameData: public boost::noncopyable{
+		Eigen::ArrayXf xx,zz;
+		ArrayXui16 ii;
+		FooterData footerData;
+	};
+
+	std::shared_ptr<CookedFrameData> cookData(const char* data) const {
+		auto ret=std::make_shared<CookedFrameData>();
+		ret->xx=trsfA(rawA(data));
+		ret->zz=trsfC(rawC(data));
+		ret->ii=rawI(data);
+		ret->footerData=getFooterData(data);
+		return ret;
+	};
 
 	VRMagicLineScan3D(const char* id){
-		/* ?? copied blindly from qarv */
+		// only needed in GLIB<=2.35.1, skipped for newer ones
 		#if !GLIB_CHECK_VERSION(2, 35, 1)
 			g_type_init();
 		#endif
@@ -89,9 +104,9 @@ public:
 	};
 
 	template<typename T>
-	T binExtract(const char* buf, size_t off){ return *(T*)(buf+off); }
+	T binExtract(const char* buf, size_t off) const { return *(T*)(buf+off); }
 
-	FooterData getFooterData(const char* data){
+	FooterData getFooterData(const char* data) const {
 		FooterData ret;
 		const auto& f(poff.footerOff);
 		ret.encoderPosition=binExtract<uint32_t>(data,f+foff.encoderPositionOff);
@@ -104,14 +119,14 @@ public:
 		ret.triggerPipelineNumber=binExtract<uint64_t>(data,f+foff.triggerPipelineNumberOff);
 		return ret;
 	};
-	Eigen::Map<ArrayXi16> rawA(const char* data){
-		return Eigen::Map<ArrayXi16> ((int16_t*)(data+poff.dataAOff),imageSensorWidth);
+	Eigen::Map<ArrayXi16> rawA(const char* data) const {
+		return Eigen::Map<ArrayXi16> ((int16_t*)(data+poff.dataAOff),aoiWidth);
 	}
-	Eigen::Map<ArrayXi16> rawC(const char* data){
-		return Eigen::Map<ArrayXi16> ((int16_t*)(data+poff.dataCOff),imageSensorWidth);
+	Eigen::Map<ArrayXi16> rawC(const char* data) const {
+		return Eigen::Map<ArrayXi16> ((int16_t*)(data+poff.dataCOff),aoiWidth);
 	}
-	Eigen::Map<ArrayXui16> rawI(const char* data){
-		return Eigen::Map<ArrayXui16> ((uint16_t*)(data+poff.dataIOff),imageSensorWidth);
+	Eigen::Map<ArrayXui16> rawI(const char* data) const {
+		return Eigen::Map<ArrayXui16> ((uint16_t*)(data+poff.dataIOff),aoiWidth);
 	}
 
 
@@ -121,6 +136,8 @@ public:
 		arv_device_set_integer_feature_value(dev,"IntensityDataEnable",1);
 		arv_device_set_integer_feature_value(dev,"CoordADataEnable",1);
 		arv_device_set_integer_feature_value(dev,"FooterDataEnable",1);
+		// arv_device_set_integer_feature_value(dev,"AOIHeight",300);
+		//if(arv_device_get_status(dev)==ARV_DEVICE_STATUS_WRITE_ERROR) std::cerr<<"Writing readd-only node."<<std::endl;
 	}
 	/* this one MUST be called whenever ROI changes -- data layout will change as well */
 	void queryPayloadLayout(){
@@ -131,11 +148,14 @@ public:
 		poff.dataIOff=arv_device_get_integer_feature_value(dev,"IntensityDataByteOffset");
 		poff.footerOff=arv_device_get_integer_feature_value(dev,"FooterDataByteOffset");
 		// image format
-		imgWd=arv_device_get_integer_feature_value(dev,"ImageWidth"); // quite useless, actually
-		imgHt=arv_device_get_integer_feature_value(dev,"ImageHeight"); // just for checking
-		imageSensorWidth=arv_device_get_integer_feature_value(dev,"ImageSensorWidth");
+		aoiWidth=arv_device_get_integer_feature_value(dev,"AOIWidth");
+		//int32_t wd=arv_device_get_integer_feature_value(dev,"AOIWidth"); // just for checking
+		//int32_t ht=arv_device_get_integer_feature_value(dev,"AOIHeight"); // just for checking
+		// std::cerr<<"payload "<<payloadSize<<", offsets: C="<<poff.dataCOff<<", A="<<poff.dataAOff<<", I="<<poff.dataIOff<<", footer="<<poff.footerOff<<", ImageWidth="<<imgWd<<", wd="<<wd<<", ht="<<ht<<std::endl;
 		// coordinate transformation params
 		// runtime check?
+		//imgWd=arv_device_get_integer_feature_value(dev,"ImageWidth"); // quite useless, actually
+		uint32_t imgHt=arv_device_get_integer_feature_value(dev,"ImageHeight"); // just for checking
 		if(imgHt!=1) throw std::runtime_error("Camera reports image with non-unit height "+std::to_string(imgHt)+"?");
 	};
 	/* these are constant, calling once is enough */
@@ -166,12 +186,12 @@ public:
 
 	const float NaNf=std::numeric_limits<float>::signaling_NaN(); // convenience
 
-	Eigen::ArrayXf trsfGeneric(const ArrayXi16& src, float scale, float offset){
+	Eigen::ArrayXf trsfGeneric(const ArrayXi16& src, float scale, float offset) const {
 		const auto valid=(src!=invalidVal);
 		Eigen::ArrayXf ret=src.cast<float>()*scale+offset;
 		return valid.select(ret,NaNf);
 	}
-	Eigen::ArrayXf trsfA(const ArrayXi16& a0){ return trsfGeneric(a0,aScale,aOff); }
-	Eigen::ArrayXf trsfC(const ArrayXi16& c0){ return trsfGeneric(c0,cScale,cOff); }
+	Eigen::ArrayXf trsfA(const ArrayXi16& a0) const { return trsfGeneric(a0,aScale,aOff); }
+	Eigen::ArrayXf trsfC(const ArrayXi16& c0) const { return trsfGeneric(c0,cScale,cOff); }
 };
 
