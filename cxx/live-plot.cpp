@@ -71,14 +71,6 @@ void SensorWorker::loop(){
 		size_t dataLen;
 		const char* data=(const char*)arv_buffer_get_data(buf,&dataLen);
 		auto cookedData=sensor.cookData(data);
-		#if 0
-			auto fr=std::make_shared<CookedFrameData>();
-			// save transformed data so that we can release the buffer
-			fr->xx=sensor.trsfA(sensor.rawA(data));
-			fr->zz=sensor.trsfC(sensor.rawC(data));
-			fr->ii=sensor.rawI(data);
-			fr->footerData=sensor.getFooterData(data);
-		#endif
 		// original data not needed anymore, return the buffer to aravis
 		arv_stream_push_buffer(sensor.stream,buf);
 		// use signal to send data (in CookedFrameData) away
@@ -124,8 +116,8 @@ class Chart: public QChart{
 				pts.append(QPointF(x,z));
 			}
 			series->replace(pts);
-			axisX()->setRange(xMin,xMax);
-			axisY()->setRange(yMin,yMax);
+			if(!isnan(xMin) && !isnan(xMax)) axisX()->setRange(xMin,xMax);
+			if(!isnan(yMin) && !isnan(yMax)) axisY()->setRange(yMin,yMax);
 		}
 };
 

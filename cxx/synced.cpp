@@ -200,11 +200,13 @@ int main(int argc, char** argv){
 		arv_device_set_boolean_feature_value(s.dev,"TrigInMultiDeviceBusEnable",i==0?0:1);
 	}
 	// set master's frame rate
-	arv_device_set_integer_feature_value(sensors[0]->dev,"AOIHeight",200);
-	arv_device_set_integer_feature_value(sensors[1]->dev,"AOIHeight",1000);
-	sensors[0]->queryPayloadLayout();
-	sensors[1]->queryPayloadLayout();
-	arv_device_set_integer_feature_value(sensors[0]->dev,"AcquisitionFrameRate_mHz",200000);
+	#if 0
+		arv_device_set_integer_feature_value(sensors[0]->dev,"AOIHeight",200);
+		arv_device_set_integer_feature_value(sensors[1]->dev,"AOIHeight",1000);
+		sensors[0]->queryPayloadLayout();
+		sensors[1]->queryPayloadLayout();
+		arv_device_set_integer_feature_value(sensors[0]->dev,"AcquisitionFrameRate_mHz",200000);
+	#endif
 	// start all cameras
 	for(int i=0;i<nSensors;i++) arv_camera_start_acquisition(sensors[i]->cam);
 

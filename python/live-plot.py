@@ -28,7 +28,7 @@ while True:
     xmin,xmax=min(xmin,np.nanmin(res['A'])),max(xmax,np.nanmax(res['A']))
     ymin,ymax=min(ymin,np.nanmin(res['C'])),max(ymax,np.nanmax(res['C']))
     ax.set_xlim(xmin,xmax)
-    ax.set_ylim(ymin,ymax)
+    ax.set_ylim(ymax,ymin)
     # print(xmin,xmax,ymin,ymax,np.sum(np.isnan(res['C'])))
     plt.suptitle('t=%g s'%res['timestamp'])
     plt.draw()
