@@ -144,7 +144,7 @@ int main(int argc, char* argv[]){
 	// acquisition will run in this thread (not the same one as the GUI)
 	auto sensorThread=new QThread;
 	// construct the sensor worker, which contains the sensor object as well
-	auto sensorWorker=new SensorWorker("VRmagicImaging-EFD0AFMH07");
+	auto sensorWorker=new SensorWorker("169.254.21.101"); // "VRmagicImaging-EFD0AFMH07");
 	// the worker is moved to that separate thread
 	sensorWorker->moveToThread(sensorThread);
 

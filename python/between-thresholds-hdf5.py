@@ -14,22 +14,22 @@ cam=Aravis.Camera.new()
 trsf=vrmagicTransformer.VRMagicTransformer(cam)
 # increase scan rate
 dev=cam.get_device()
-dev.set_integer_feature_value('AcquisitionFrameRate_mHz',50000)
+dev.set_integer_feature_value('AcquisitionFrameRate_mHz',200000)
 dev.set_string_feature_value('LaserMode','LaserOn')
 stream=cam.create_stream(None,None)
 if not stream: raise RuntimeError("Failed to create stream (camera busy?).")
 
 # set up buffers and deque for thread comm
 payload=cam.get_payload()
-for i in range(0,50): stream.push_buffer(Aravis.Buffer.new_allocate(payload))
-bufQueue=collections.deque(maxlen=50) # discard anything unprocessed if more than 50 waiting already
+for i in range(0,500): stream.push_buffer(Aravis.Buffer.new_allocate(payload))
+bufQueue=collections.deque(maxlen=500) # discard anything unprocessed if more than 50 waiting already
 
 
 # set threshold so that mean height is above it at the very beginning and at the very end
 # leaving that domain will trigger and stop acquisition respecitvely.
 
 
-def consumeBuffers(thresh=-20):
+def consumeBuffers(thresh=-30):
     'Consumes buffers from bufQueue, transforms, builds larger chunks and dumps to HDF5 onces in a while'
     # save this many many consecutive frames as a single 2d array to HDF5
     h5chunk=2048
@@ -119,7 +119,7 @@ def produceBuffers():
         N+=1
         if N%Nmod==0:
             t1=time.time()
-            sys.stderr.write('%.3g fps                                  \r'%(Nmod*1./(t1-t0)));
+            sys.stderr.write('          %.5g fps                           \r'%(Nmod*1./(t1-t0)));
             t0=t1
 
 # start the consumer in bg thread
